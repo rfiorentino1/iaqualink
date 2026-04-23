@@ -32,9 +32,9 @@
         "title": "Polling Interval (seconds)",
         "type": "integer",
         "default": 30,
-        "minimum": 10,
+        "minimum": 2,
         "maximum": 300,
-        "description": "How often (in seconds) to poll the iAquaLink API for device state updates."
+        "description": "How often (in seconds) to poll the iAquaLink API for device state updates. Lower values give faster response to external state changes (e.g. a pool technician tapping the panel) but hit the Jandy API more often. 30s is the default and safe for most users; 3–5s works for a single account and feels near-instant."
       },
       "temperatureUnit": {
         "title": "Temperature Unit",

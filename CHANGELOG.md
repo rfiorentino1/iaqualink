@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.5-rfio.1] - 2026-04-27
+
+Fork-only release: rebase of [1.0.5] on top of our existing customisation
+so we keep the lower polling-minimum while picking up upstream's startup
+retry and error-logging improvements.
+
+### Kept (from fork)
+- **`pollingInterval` minimum is `2` seconds**, not `10`. Upstream v1.0.5 uses a 10s floor; on a single-account setup the API tolerates 3–5s polling fine, and the lower floor lets responses to external panel changes feel near-instant.
+- **Verbose schema description** explaining the rate trade-off so anyone tuning the field in Homebridge UI understands the practical range.
+
+### Picked up (from upstream 1.0.5)
+- Connection retry on startup failure (60s loop instead of giving up).
+- Poll errors and auth-during-poll failures now log at `error`, not `debug`/`warn`.
+
+---
+
 ## [1.0.5] - 2026-04-27
 
 ### Added

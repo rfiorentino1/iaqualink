@@ -7,11 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.0.5-rfio.1] - 2026-04-27
+## [1.0.6-rfio.0] - 2026-05-09
 
-Fork-only release: rebase of [1.0.5] on top of our existing customisation
-so we keep the lower polling-minimum while picking up upstream's startup
-retry and error-logging improvements.
+Re-version of [1.0.5-rfio.1] under a non-prerelease-of-upstream version
+string. SemVer treats `1.0.5-rfio.1` as a *pre-release of `1.0.5`*, which
+made npm/Homebridge UI consider it OLDER than upstream `1.0.5` and
+persistently offer to "update" us by overwriting the fork. Bumping the
+base version to `1.0.6` (and using `-rfio.0` to mark it as our line)
+puts the fork unambiguously ahead of upstream `1.0.5`. When upstream
+eventually publishes `1.0.6` or later, npm correctly offers a real
+update again.
+
+No code changes vs `1.0.5-rfio.1`.
+
+The polling-minimum-from-10-to-2 patch has also been submitted as a PR
+to upstream ([DCMarine/iaqualink#1]). If accepted there and released as
+upstream `1.0.6`, this fork can be retired.
 
 ### Kept (from fork)
 - **`pollingInterval` minimum is `2` seconds**, not `10`. Upstream v1.0.5 uses a 10s floor; on a single-account setup the API tolerates 3–5s polling fine, and the lower floor lets responses to external panel changes feel near-instant.
@@ -20,6 +31,8 @@ retry and error-logging improvements.
 ### Picked up (from upstream 1.0.5)
 - Connection retry on startup failure (60s loop instead of giving up).
 - Poll errors and auth-during-poll failures now log at `error`, not `debug`/`warn`.
+
+[DCMarine/iaqualink#1]: https://github.com/DCMarine/iaqualink/pull/1
 
 ---
 

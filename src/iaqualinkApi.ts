@@ -1,4 +1,4 @@
-import axios, { AxiosInstance } from 'axios';
+import axios, { AxiosError, AxiosInstance } from 'axios';
 
 export const AQUALINK_API_KEY = 'EOOEMOW4YR6QNB07';
 export const LOGIN_URL = 'https://prod.zodiac-io.com/users/v1/login';
@@ -95,18 +95,34 @@ export class IAqualinkApiClient {
   }
 
   async sendCommand(serial: string, command: string, extra: Record<string, string> = {}): Promise<unknown> {
-    const params: Record<string, string> = {
-      actionID: 'command',
-      command,
-      serial,
-      sessionID: this.sessionId,
-      ...extra,
+    const buildUrl = () => {
+      const params: Record<string, string> = {
+        actionID: 'command',
+        command,
+        serial,
+        sessionID: this.sessionId,
+        ...extra,
+      };
+      const queryStr = Object.entries(params).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
+      return `${SESSION_URL}?${queryStr}`;
     };
-    const queryStr = Object.entries(params).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
-    const resp = await this.http.get(`${SESSION_URL}?${queryStr}`, {
-      headers: this.sessionHeaders(),
-    });
-    return resp.data;
+
+    try {
+      const resp = await this.http.get(buildUrl(), { headers: this.sessionHeaders() });
+      return resp.data;
+    } catch (err) {
+      // Jandy's session.json invalidates a sessionID whenever a fresh login is
+      // performed against the same account (e.g. the iAquaLink mobile app being
+      // opened). The displaced session then returns 5xx — sometimes 500, sometimes
+      // 401/403 — until we re-login. Refresh and retry once; if it still fails,
+      // let the caller see the original-class error.
+      if (!isLikelySessionInvalidation(err)) {
+        throw err;
+      }
+      await this.refreshAuth();
+      const resp = await this.http.get(buildUrl(), { headers: this.sessionHeaders() });
+      return resp.data;
+    }
   }
 
   async getHomeScreen(serial: string): Promise<unknown> {
@@ -152,4 +168,10 @@ export class IAqualinkApiClient {
   get isLoggedIn(): boolean {
     return this.authToken !== '';
   }
+}
+
+function isLikelySessionInvalidation(err: unknown): boolean {
+  const ax = err as AxiosError | undefined;
+  const status = ax?.response?.status;
+  return status !== undefined && (status === 401 || status === 403 || (status >= 500 && status < 600));
 }

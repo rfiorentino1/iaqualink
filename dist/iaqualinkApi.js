@@ -80,18 +80,34 @@ class IAqualinkApiClient {
         };
     }
     async sendCommand(serial, command, extra = {}) {
-        const params = {
-            actionID: 'command',
-            command,
-            serial,
-            sessionID: this.sessionId,
-            ...extra,
+        const buildUrl = () => {
+            const params = {
+                actionID: 'command',
+                command,
+                serial,
+                sessionID: this.sessionId,
+                ...extra,
+            };
+            const queryStr = Object.entries(params).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
+            return `${exports.SESSION_URL}?${queryStr}`;
         };
-        const queryStr = Object.entries(params).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
-        const resp = await this.http.get(`${exports.SESSION_URL}?${queryStr}`, {
-            headers: this.sessionHeaders(),
-        });
-        return resp.data;
+        try {
+            const resp = await this.http.get(buildUrl(), { headers: this.sessionHeaders() });
+            return resp.data;
+        }
+        catch (err) {
+            // Jandy's session.json invalidates a sessionID whenever a fresh login is
+            // performed against the same account (e.g. the iAquaLink mobile app being
+            // opened). The displaced session then returns 5xx — sometimes 500, sometimes
+            // 401/403 — until we re-login. Refresh and retry once; if it still fails,
+            // let the caller see the original-class error.
+            if (!isLikelySessionInvalidation(err)) {
+                throw err;
+            }
+            await this.refreshAuth();
+            const resp = await this.http.get(buildUrl(), { headers: this.sessionHeaders() });
+            return resp.data;
+        }
     }
     async getHomeScreen(serial) {
         return this.sendCommand(serial, 'get_home');
@@ -129,3 +145,8 @@ class IAqualinkApiClient {
     }
 }
 exports.IAqualinkApiClient = IAqualinkApiClient;
+function isLikelySessionInvalidation(err) {
+    const ax = err;
+    const status = ax?.response?.status;
+    return status !== undefined && (status === 401 || status === 403 || (status >= 500 && status < 600));
+}

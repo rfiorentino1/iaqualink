@@ -95,12 +95,19 @@ export class IAqualinkApiClient {
   }
 
   async sendCommand(serial: string, command: string, extra: Record<string, string> = {}): Promise<unknown> {
+    // NOTE: sessionID is intentionally omitted from the query string. session.json
+    // authenticates from the `Authorization: Bearer <IdToken>` header alone (verified
+    // empirically against a real account 2026-05-24). Including sessionID was the
+    // source of the chronic 5xx storms — Jandy treats sessionID as a single-slot per
+    // (api_key, user) handle, so any concurrent client login (mom opening the mobile
+    // app) invalidated the plugin's slot. Bearer JWTs are per-token-instance and
+    // coexist freely. This is also how the Alexa skill stays connected alongside the
+    // mobile app on the same account.
     const buildUrl = () => {
       const params: Record<string, string> = {
         actionID: 'command',
         command,
         serial,
-        sessionID: this.sessionId,
         ...extra,
       };
       const queryStr = Object.entries(params).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
@@ -111,11 +118,8 @@ export class IAqualinkApiClient {
       const resp = await this.http.get(buildUrl(), { headers: this.sessionHeaders() });
       return resp.data;
     } catch (err) {
-      // Jandy's session.json invalidates a sessionID whenever a fresh login is
-      // performed against the same account (e.g. the iAquaLink mobile app being
-      // opened). The displaced session then returns 5xx — sometimes 500, sometimes
-      // 401/403 — until we re-login. Refresh and retry once; if it still fails,
-      // let the caller see the original-class error.
+      // Retained as belt-and-suspenders against IdToken expiry (1 hour) or transient
+      // backend hiccups. Refresh and retry once; if it still fails, propagate.
       if (!isLikelySessionInvalidation(err)) {
         throw err;
       }

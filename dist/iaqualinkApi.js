@@ -16,7 +16,6 @@ class IAqualinkApiClient {
     http;
     authToken = '';
     userId = '';
-    sessionId = '';
     idToken = '';
     refreshToken = '';
     constructor(username, password) {
@@ -39,7 +38,6 @@ class IAqualinkApiClient {
         const data = resp.data;
         this.authToken = data.authentication_token;
         this.userId = String(data.id);
-        this.sessionId = data.session_id;
         this.idToken = data.userPoolOAuth?.IdToken ?? '';
         this.refreshToken = data.userPoolOAuth?.RefreshToken ?? '';
     }
@@ -52,7 +50,6 @@ class IAqualinkApiClient {
             const data = resp.data;
             this.authToken = data.authentication_token;
             this.userId = String(data.id);
-            this.sessionId = data.session_id;
             this.idToken = data.userPoolOAuth?.IdToken ?? this.idToken;
             if (data.userPoolOAuth?.RefreshToken) {
                 this.refreshToken = data.userPoolOAuth.RefreshToken;

@@ -22,7 +22,6 @@ export declare class IAqualinkApiClient {
     private readonly http;
     private authToken;
     private userId;
-    private sessionId;
     private idToken;
     private refreshToken;
     constructor(username: string, password: string);

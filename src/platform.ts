@@ -147,14 +147,17 @@ export class IaquaLinkPlatform implements DynamicPlatformPlugin {
   private parseHomeScreen(data: HomeScreenResponse, system: IAqualinkDevice, tempUnit: string): ParsedDevice[] {
     const screen = data?.home_screen;
     if (!screen) {
+      this.log.warn(`[${system.name}] home_screen missing from API response (data keys: ${data ? Object.keys(data).join(',') : 'null'})`);
       return [];
     }
+    this.log.debug(`[${system.name}] home_screen received: ${screen.length} entries, keys=[${screen.map(item => Object.keys(item)[0]).join(',')}]`);
     const parsed: ParsedDevice[] = [];
     for (const item of screen.slice(4)) {
       const name = Object.keys(item)[0];
       const state = String(Object.values(item)[0]);
       const deviceType = this.inferHomeDeviceType(name);
       if (!deviceType) {
+        this.log.debug(`[${system.name}] home_screen: no device handler for "${name}" (state="${state}") — skipping`);
         continue;
       }
       parsed.push({
@@ -167,6 +170,7 @@ export class IaquaLinkPlatform implements DynamicPlatformPlugin {
         tempUnit,
       });
     }
+    this.log.debug(`[${system.name}] home_screen parsed ${parsed.length} device(s)`);
     return parsed;
   }
 
@@ -378,13 +382,19 @@ export class IaquaLinkPlatform implements DynamicPlatformPlugin {
   }
 
   private applyUpdates(updates: ParsedDevice[]) {
+    let matched = 0;
+    let missed = 0;
     for (const update of updates) {
       const uuid = this.homebridgeApi.hap.uuid.generate(`${update.serial}-${update.name}`);
       const accessory = this.accessories.find(a => a.UUID === uuid);
       if (accessory) {
         accessory.context.device = update;
+        matched++;
+      } else {
+        missed++;
       }
     }
+    this.log.debug(`applyUpdates: applied ${matched} update(s)${missed ? `, ${missed} had no matching accessory` : ''}`);
   }
 }
 

@@ -9,6 +9,8 @@ import {
 } from 'homebridge';
 
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
+
+const FORK_BUILD = '2026-05-26.003 [rfiorentino1/iaqualink#main]';
 import { IAqualinkApiClient, IAqualinkDevice } from './iaqualinkApi.js';
 import { IaquaLinkConfig, ParsedDevice, DeviceType } from './types.js';
 import { SwitchAccessory } from './accessories/switchAccessory.js';
@@ -39,6 +41,8 @@ export class IaquaLinkPlatform implements DynamicPlatformPlugin {
     this.Characteristic = homebridgeApi.hap.Characteristic;
     this.config = config as IaquaLinkConfig;
     this.pollingInterval = (this.config.pollingInterval ?? 30) * 1000;
+
+    this.log.info(`iAquaLink fork build ${FORK_BUILD} — pollingInterval=${this.pollingInterval / 1000}s`);
 
     this.api = new IAqualinkApiClient(this.config.username, this.config.password);
 
@@ -365,6 +369,7 @@ export class IaquaLinkPlatform implements DynamicPlatformPlugin {
       // Poll home-screen devices independently
       try {
         const homeData = await this.api.getHomeScreen(system.serial_number) as HomeScreenResponse;
+        this.log.debug(`[${system.name}] home_screen full response: ${JSON.stringify(homeData)}`);
         tempUnit = this.extractTempUnit(homeData);
         this.applyUpdates(this.parseHomeScreen(homeData, system, tempUnit));
       } catch (err) {
@@ -374,10 +379,23 @@ export class IaquaLinkPlatform implements DynamicPlatformPlugin {
       // Poll auxiliary devices independently
       try {
         const devicesData = await this.api.getDevicesScreen(system.serial_number) as DevicesScreenResponse;
+        this.log.debug(`[${system.name}] devices_screen full response: ${JSON.stringify(devicesData)}`);
         this.applyUpdates(this.parseDevicesScreen(devicesData, system, tempUnit));
       } catch (err) {
         this.log.error(`[${system.name}] Poll error (auxiliary devices):`, String(err));
       }
+
+      // Per-poll state snapshot: what the plugin thinks each accessory holds
+      // right now. Lets us see (a) whether each accessory is being updated and
+      // (b) whether any of them have surprising/invalid state values that the
+      // Home app might be choking on.
+      const snapshot = this.accessories.map(a => {
+        const d = a.context.device as ParsedDevice | undefined;
+        const cached = (a.context as { lastTempC?: number }).lastTempC;
+        const cachedStr = typeof cached === 'number' ? ` cached=${cached}°C` : '';
+        return `[${d?.label ?? a.displayName}: type=${d?.deviceType ?? '?'} state=${JSON.stringify(d?.state ?? null)}${cachedStr}]`;
+      }).join(' ');
+      this.log.debug(`[${system.name}] state snapshot: ${snapshot}`);
     }
   }
 

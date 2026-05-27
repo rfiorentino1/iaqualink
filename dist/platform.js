@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.IaquaLinkPlatform = void 0;
 const settings_js_1 = require("./settings.js");
+const FORK_BUILD = '2026-05-26.003 [rfiorentino1/iaqualink#main]';
 const iaqualinkApi_js_1 = require("./iaqualinkApi.js");
 const switchAccessory_js_1 = require("./accessories/switchAccessory.js");
 const thermostatAccessory_js_1 = require("./accessories/thermostatAccessory.js");
@@ -28,6 +29,7 @@ class IaquaLinkPlatform {
         this.Characteristic = homebridgeApi.hap.Characteristic;
         this.config = config;
         this.pollingInterval = (this.config.pollingInterval ?? 30) * 1000;
+        this.log.info(`iAquaLink fork build ${FORK_BUILD} — pollingInterval=${this.pollingInterval / 1000}s`);
         this.api = new iaqualinkApi_js_1.IAqualinkApiClient(this.config.username, this.config.password);
         this.homebridgeApi.on('didFinishLaunching', () => {
             this.log.debug('Finished launching, starting device discovery');
@@ -362,6 +364,7 @@ class IaquaLinkPlatform {
             // Poll home-screen devices independently
             try {
                 const homeData = await this.api.getHomeScreen(system.serial_number);
+                this.log.debug(`[${system.name}] home_screen full response: ${JSON.stringify(homeData)}`);
                 tempUnit = this.extractTempUnit(homeData);
                 this.applyUpdates(this.parseHomeScreen(homeData, system, tempUnit));
             }
@@ -371,11 +374,23 @@ class IaquaLinkPlatform {
             // Poll auxiliary devices independently
             try {
                 const devicesData = await this.api.getDevicesScreen(system.serial_number);
+                this.log.debug(`[${system.name}] devices_screen full response: ${JSON.stringify(devicesData)}`);
                 this.applyUpdates(this.parseDevicesScreen(devicesData, system, tempUnit));
             }
             catch (err) {
                 this.log.error(`[${system.name}] Poll error (auxiliary devices):`, String(err));
             }
+            // Per-poll state snapshot: what the plugin thinks each accessory holds
+            // right now. Lets us see (a) whether each accessory is being updated and
+            // (b) whether any of them have surprising/invalid state values that the
+            // Home app might be choking on.
+            const snapshot = this.accessories.map(a => {
+                const d = a.context.device;
+                const cached = a.context.lastTempC;
+                const cachedStr = typeof cached === 'number' ? ` cached=${cached}°C` : '';
+                return `[${d?.label ?? a.displayName}: type=${d?.deviceType ?? '?'} state=${JSON.stringify(d?.state ?? null)}${cachedStr}]`;
+            }).join(' ');
+            this.log.debug(`[${system.name}] state snapshot: ${snapshot}`);
         }
     }
     applyUpdates(updates) {

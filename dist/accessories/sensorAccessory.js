@@ -57,10 +57,22 @@ class SensorAccessory {
     async getTemperature() {
         const raw = parseFloat(this.device.state);
         if (isNaN(raw)) {
-            this.platform.log.debug(`[${this.device.label}] No temperature reading available`);
+            // The iAqualink API stops reporting a temperature when the associated
+            // equipment is off (e.g. pool_temp is blank when the pool pump is off).
+            // The iAqualink mobile app continues to show the last-known value in
+            // that case, so we mirror that behaviour by returning the cached
+            // reading instead of throwing — otherwise the characteristic ends up
+            // "No Response" in the Home app whenever the pump cycles off.
+            const cached = this.accessory.context.lastTempC;
+            if (typeof cached === 'number') {
+                this.platform.log.debug(`[${this.device.label}] No live reading; returning cached ${cached}°C`);
+                return cached;
+            }
+            this.platform.log.debug(`[${this.device.label}] No temperature reading available and no cached value yet`);
             throw new this.platform.homebridgeApi.hap.HapStatusError(-70412 /* this.platform.homebridgeApi.hap.HAPStatus.NOT_ALLOWED_IN_CURRENT_STATE */);
         }
         const tempC = this.isFahrenheit ? fahrenheitToCelsius(raw) : raw;
+        this.accessory.context.lastTempC = tempC;
         this.platform.log.debug(`[${this.device.label}] GET Temperature -> ${tempC}°C (raw: ${raw}°${this.isFahrenheit ? 'F' : 'C'})`);
         return tempC;
     }
